@@ -71,6 +71,9 @@ px4flow_bl: $(MAKEFILE_LIST) $(LIBOPENCM3)
 aerocore_bl: $(MAKEFILE_LIST) $(LIBOPENCM3)
 	make -f Makefile.f4 TARGET=aerocore INTERFACE=USB BOARD=AEROCORE USBDEVICESTRING="\\\"Gumstix BL AEROCORE\\\"" USBPRODUCTID="0x1001"
 
+unode_bl: $(MAKEFILE_LIST) $(LIBOPENCM3)
+	make -f Makefile.f4 TARGET=unode INTERFACE=USB BOARD=UNODE USBDEVICESTRING="\\\"uNODE BL\\\"" USBPRODUCTID="0x2000"
+
 # Default bootloader delay is *very* short, just long enough to catch
 # the board for recovery but not so long as to make restarting after a 
 # brownout problematic.
