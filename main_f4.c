@@ -126,31 +126,6 @@ static struct {
 # define BOARD_FORCE_BL_PULL		GPIO_PUPD_PULLUP
 #endif
 
-#ifdef BOARD_FMUV3
-# define BOARD_TYPE			10
-# define _FLASH_KBYTES			(*(uint16_t *)0x1fff7a22)
-# define BOARD_FLASH_SECTORS		((_FLASH_KBYTES == 0x400) ? 11 : 23)
-# define BOARD_FLASH_SIZE		(_FLASH_KBYTES * 1024)
-
-# define OSC_FREQ			24
-
-# define BOARD_PIN_LED_ACTIVITY		0		// no activity LED
-# define BOARD_PIN_LED_BOOTLOADER	GPIO12
-# define BOARD_PORT_LEDS		GPIOE
-# define BOARD_CLOCK_LEDS		RCC_AHB1ENR_IOPEEN
-# define BOARD_LED_ON			gpio_clear
-# define BOARD_LED_OFF			gpio_set
-
-# define BOARD_FORCE_BL_PIN_OUT		GPIO14
-# define BOARD_FORCE_BL_PIN_IN		GPIO11
-# define BOARD_FORCE_BL_PORT		GPIOE
-# define BOARD_FORCE_BL_CLOCK_REGISTER	RCC_AHB1ENR
-# define BOARD_FORCE_BL_CLOCK_BIT	RCC_AHB1ENR_IOPEEN
-# define BOARD_FORCE_BL_PULL		GPIO_PUPD_PULLUP
-
-//# define BOARD_BOOT_FAIL_DETECT		/* V2 boards should support boot failure detection */
-#endif
-
 #ifdef BOARD_AEROCORE
 # define BOARD_TYPE			98
 # define BOARD_FLASH_SECTORS		23
@@ -498,6 +473,29 @@ main(void)
 		 */
 		board_set_rtc_signature(0);
 	}
+
+#ifdef BOOT_DELAY_ADDRESS
+        {
+            /*
+              if a boot delay signature is present then delay the boot
+              by at least that amount of time in seconds. This allows
+              for an opportunity for a companion computer to load a
+              new firmware, while still booting fast by sending a BOOT
+              command
+             */
+            uint32_t sig1 = flash_func_read_word(BOOT_DELAY_ADDRESS);
+            uint32_t sig2 = flash_func_read_word(BOOT_DELAY_ADDRESS+4);
+            if (sig2 == BOOT_DELAY_SIGNATURE2 &&
+                (sig1 & 0xFFFFFF00) == (BOOT_DELAY_SIGNATURE1 & 0xFFFFFF00)) {
+                unsigned boot_delay = sig1 & 0xFF;
+                if (boot_delay <= BOOT_DELAY_MAX) {
+                    try_boot = false;
+                    if (timeout < boot_delay*1000)
+                        timeout = boot_delay*1000;
+                }
+            }
+        }
+#endif
 
 #ifdef INTERFACE_USB
 	/*

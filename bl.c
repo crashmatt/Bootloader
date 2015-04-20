@@ -92,7 +92,9 @@
 #define PROTO_PROG_MULTI	0x27    // write bytes at program address and increment
 #define PROTO_GET_CRC		0x29	// compute & return a CRC
 #define PROTO_GET_OTP		0x2a	// read a byte from OTP at the given address
-#define PROTO_GET_SN        0x2b    // read a word from UDID area ( Serial)  at the given address
+#define PROTO_GET_SN		0x2b    // read a word from UDID area ( Serial)  at the given address
+#define PROTO_GET_CHIP		0x2c    // read chip version (MCU IDCODE)
+#define PROTO_SET_DELAY		0x2d    // set minimum boot delay
 #define PROTO_BOOT		0x30    // boot the application
 #define PROTO_DEBUG		0x31    // emit debug information - format not defined
 
@@ -105,6 +107,9 @@
 #define PROTO_DEVICE_BOARD_REV	3	// board revision
 #define PROTO_DEVICE_FW_SIZE	4	// size of flashable area
 #define PROTO_DEVICE_VEC_AREA	5	// contents of reserved vectors 7-10
+
+// address of MCU IDCODE
+#define DBGMCU_IDCODE		0xE0042000
 
 static const uint32_t	bl_proto_rev = 4;	// value returned by PROTO_DEVICE_BL_REV
 
@@ -573,11 +578,48 @@ bootloader(unsigned timeout)
 				cout_word(flash_func_read_sn(index));
 			}
 			break;
+		case PROTO_GET_CHIP:
+			{
+                            cout_word(*(uint32_t *)DBGMCU_IDCODE);
+			}
+			break;
 			// finalise programming and boot the system
 			//
 			// command:			BOOT/EOC
 			// reply:			INSYNC/OK
 			//
+
+#ifdef BOOT_DELAY_ADDRESS
+                case PROTO_SET_DELAY:
+			{
+				/*
+				  Allow for the bootloader to setup a
+				  boot delay signature which tells the
+				  board to delay for at least a
+				  specified number of seconds on boot.
+				 */
+				int v = cin_wait(100);
+				if (v < 0)
+					goto cmd_bad;
+				uint8_t boot_delay = v & 0xFF;
+				if (boot_delay > BOOT_DELAY_MAX)
+					goto cmd_bad;
+				
+				uint32_t sig1 = flash_func_read_word(BOOT_DELAY_ADDRESS);
+				uint32_t sig2 = flash_func_read_word(BOOT_DELAY_ADDRESS+4);
+				
+				if (sig1 != BOOT_DELAY_SIGNATURE1 ||
+                                    sig2 != BOOT_DELAY_SIGNATURE2)
+					goto cmd_bad;
+				
+				uint32_t value = (BOOT_DELAY_SIGNATURE1 & 0xFFFFFF00) | boot_delay;
+				flash_func_write_word(BOOT_DELAY_ADDRESS, value);
+				if (flash_func_read_word(BOOT_DELAY_ADDRESS) != value)
+					goto cmd_fail;
+			}
+			break;
+#endif
+
 		case PROTO_BOOT:
 			// expect EOC
 			if (cin_wait(1000) != PROTO_EOC)
